@@ -185,11 +185,11 @@ func (w *chunkingWriter) Write(p []byte) (n int, err error) {
 func copy(fnames []string) error {
 	// copy
 	if isTmux {
-		if out, err := exec.Command("tmux", "show", "-v", "allow-passthrough").Output(); err != nil {
-			return fmt.Errorf("Error running 'tmux show -v allow-passthrough': %w", err)
+		if out, err := exec.Command("tmux", "show", "-gv", "allow-passthrough").Output(); err != nil {
+			return fmt.Errorf("Error running 'tmux show -gv allow-passthrough': %w", err)
 		} else {
 			outStr := strings.TrimSpace(string(out))
-			debugLog.Println("'tmux show -v allow-passthrough':", outStr)
+			debugLog.Println("'tmux show -gv allow-passthrough':", outStr)
 			if outStr != "on" && outStr != "all" {
 				return fmt.Errorf("tmux allow-passthrough must be set to 'on' or 'all'")
 			}
@@ -524,6 +524,8 @@ var rootCmd = &cobra.Command{
 func ttyDevice() string {
 	if deviceFlag != "" {
 		return deviceFlag
+	} else if sshtty := getSshTtyViaTmux(); sshtty != "" {
+		return sshtty
 	} else if isScreen {
 		return "/dev/tty"
 	} else if sshtty := os.Getenv("SSH_TTY"); sshtty != "" {
@@ -531,6 +533,25 @@ func ttyDevice() string {
 	} else {
 		return "/dev/tty"
 	}
+}
+
+func getSshTtyViaTmux() string {
+	if !isTmux {
+		return ""
+	}
+
+	output, err := exec.Command("tmux", "show-environment", "SSH_TTY").Output()
+	if err != nil {
+		return ""
+	}
+	debugLog.Printf("'tmux show-environment SSH_TTY': %s", output)
+
+	key_val := strings.SplitN(string(output), "=", 2)
+	if len(key_val) != 2 {
+		return ""
+	}
+
+	return strings.TrimSpace(key_val[1])
 }
 
 func init() {
